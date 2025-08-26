@@ -15,9 +15,9 @@ class State(Enum):
 
     Attributes:
         IDLE: Elevator is not moving
-        MOVING: Elevator is in motion
-        DOOR_OPEN: Elevator door is open
-        DOOR_CLOSED: Elevator door is closed
+        UP: Elevator is in the UP motion
+        DOWN: Elevator is in the DOWN motion
+        EMERGENCY: Elevator is in emergency mode
     """
     IDLE = 1
     UP = 2
@@ -228,7 +228,7 @@ class Elevator:
     def close_door(self):
         """Close the elevator door"""
         if self.state == State.IDLE:
-            self.door_state = DoorState.CLOSED
+            self.door_state(DoorState.CLOSED)
             print(f"Elevator {self.id} door closed.")
         else:
             print(f"Cannot close door while elevator {self.id} is moving.")
@@ -372,10 +372,10 @@ class PassengerElevator(Elevator):
     def process_emergency(self):
         self.passenger_down_queue.clear()
         self.passenger_up_queue.clear()
-        self.current_floor = 1
-        self.door_state = DoorState.CLOSED
-        self.state = State.IDLE
-        self.emergency_status = True
+        self.current_floor(1)
+        self.door_state(DoorState.CLOSED)
+        self.state(State.IDLE)
+        self.emergency_status(True)
         print(
             f"Queueus cleared, current floor is {self.current_floor}. Elevator {self.id} is processing emergency. Doors are {self.door_state.name}.")
 
@@ -488,6 +488,7 @@ class PassengerElevator(Elevator):
                 print(f"Processing up requests for elevator {self.id}.")
                 self.process_up_requests()
 
+
 class ServiceElevator(Elevator):
     """ServiceElevator class definition, inheriting from Elevator
 
@@ -513,10 +514,12 @@ class ServiceElevator(Elevator):
         while self.service_queue:
             curr_request = self.service_queue.popleft()
             print()
-            print(f"Currently at {self.current_floor}. Processing request to floor {curr_request.target_floor}.")
+            print(
+                f"Currently at {self.current_floor}. Processing request to floor {curr_request.target_floor}.")
             try:
                 time.sleep(1)
-                print(f"Moving elevator {self.id} to floor {curr_request.target_floor}.")
+                print(
+                    f"Moving elevator {self.id} to floor {curr_request.target_floor}.")
                 for _ in range(3):
                     print(".", end="", flush=True)
                     time.sleep(0.5)
@@ -525,9 +528,9 @@ class ServiceElevator(Elevator):
             except Exception as e:
                 print(f"Error moving elevator {self.id}: {e}")
                 continue
-            
-            self.current_floor = curr_request.target_floor
-            self.state = curr_request.direction
+
+            self.current_floor(curr_request.target_floor)
+            self.state(curr_request.direction)
 
             print(f"Arrived at floor {self.current_floor}.")
 
@@ -544,22 +547,24 @@ class ServiceElevator(Elevator):
 
     def process_emergency(self):
         self.service_queue.clear()
-        self.current_floor = 1
-        self.door_state = DoorState.OPEN
-        self.state = State.IDLE
-        self.emergency_status = True
+        self.current_floor(1)
+        self.door_state(DoorState.OPEN)
+        self.state(State.IDLE)
+        self.emergency_status(True)
         print(
             f"Queue cleared, current floor is {self.current_floor}. Service elevator {self.id} is processing emergency. Doors are {self.door_state.name}.")
 
 
 class FreightElevator(Elevator):
     """FreightElevator class definition, inheriting from Elevator"""
+
     def __init__(self, id: int, emergency_status: bool, current_floor: int = 0):
         """_summary_"""
         super().__init__(id, emergency_status, current_floor)
         self.elevator_type = ElevatorType.FREIGHT
         self.freight_queue = deque()
-        
+
+
 class ElevatorFactory:
     """Factory class to create different types of elevators"""
     @staticmethod
@@ -573,10 +578,40 @@ class ElevatorFactory:
             return PassengerElevator(id, emergency_status, current_floor)
         else:
             raise ValueError("Invalid elevator type")
-        
+
+
 class Controller:
     """Controller class to manage elevators"""
+
     def __init__(self, factory):
         """Initialize the controller with an empty list of elevators"""
-        self.elevators = []
         self.factory = factory
+        self.elevators = [
+            factory.create_elevator(ElevatorType.PASSENGER, id=1),
+            factory.create_elevator(ElevatorType.SERVICE, id=2),
+            factory.create_elevator(ElevatorType.FREIGHT, id=3)
+        ]
+
+    def send_passenger_up_requests(self, request: Request):
+        """Send a passenger request to the appropriate elevator"""
+        for elevator in self.elevators:
+            elevator.add_up_request(request)
+            print(f"Request sent to elevator {elevator.id}.")
+        return
+
+    def send_passenger_down_requests(self, request: Request):
+        """Send a passenger request to the appropriate elevator"""
+        for elevator in self.elevators:
+            if isinstance(elevator, PassengerElevator):
+                elevator.add_down_request(request)
+            print(f"Request sent to elevator {elevator.id}.")
+        return
+
+    def send_freight_requests(self, request: Request):
+        """Send a freight request to the appropriate elevator"""
+        for elevator in self.elevators:
+            if isinstance(elevator, FreightElevator):
+                elevator.add_request(request)
+                print(f"Request sent to elevator {elevator.id}.")
+                return
+        print("No available freight elevator to service the request.")
